@@ -13,6 +13,7 @@ mdp = FlatMDP(width=5, height=5, init_loc=(0, 0), goal_locs=[(3, 3)], gamma=0.95
 
 histories = []
 
+#Explore environment
 for episode in range(100):
     mdp.reset()
     history = [mdp.cur_state]
@@ -31,7 +32,7 @@ d_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 l_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 game_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
-
+#turn histories into object-dynamic-object dicts
 for episode in histories:
     for i in range(1,len(episode)):
        last_state = episode[i-1]
@@ -152,6 +153,9 @@ for episode in histories:
                d_dict[cur_state.d]['game']['up'] = 1
                l_dict[cur_state.l]['game']['up'] = 1
        elif cur_state.xg == last_state.xg and cur_state.yg == last_state.yg: #no movement
+           #this records passive dynamics on game. we comment this out for easiness later on calculating probabilities, should be reefactored in later
+           pass
+           '''
            try:
                robot_dict[(cur_state.xr,cur_state.yr)]['game']['stop'] += 1
                u_dict[cur_state.u]['game']['stop'] += 1
@@ -164,8 +168,9 @@ for episode in histories:
                r_dict[cur_state.r]['game']['stop'] = 1
                d_dict[cur_state.d]['game']['stop'] = 1
                l_dict[cur_state.l]['game']['stop'] = 1
+           '''
  
-
+'''
 print(robot_dict[(2,4)]['u'])
 print(robot_dict[(2,4)]['d'])
 print(robot_dict[(1,1)]['u'])
@@ -189,6 +194,9 @@ print(u_dict[True]['d'])
 print(u_dict[False]['l'])
 print(l_dict[True]['u'])
 print(l_dict[False]['r'])
+'''
+
+
 
 #Code for discovering structures
 objs = ["robot","u","d","l","r","game"]
@@ -196,6 +204,7 @@ obj_dyn ={"u": ["u_press"], "d": ["d_press"], "l": ["l_press"], "r":["r_press"],
 
 true_dyn_succ = {"u_press": "robot", "d_press": "robot", "l_press": "robot", "r_press": "robot", "up" : "u", "right": "r", "down": "d", "left": "l"}
 
+#randomly assign succesor objects to active dynamics on objects
 def random_dynamic_successor(obj_dyn):
     ret_graph = {}
     graph_objects = list(obj_dyn.keys())
@@ -207,7 +216,7 @@ def random_dynamic_successor(obj_dyn):
             ret_graph[dyn] = random.choice(potential_successors)
     return(ret_graph)
 
-print(random_dynamic_successor(obj_dyn))
+#print(random_dynamic_successor(obj_dyn))
 
 #turn random_graph into a graph based on objct dynamics, if it is a DAG, valid. Otherwise, throwout
 
@@ -245,9 +254,10 @@ def viz_ichain(G):
     
 
 true_ichain = create_ichain(true_dyn_succ,obj_dyn)
-print(nx.is_directed_acyclic_graph(true_ichain))
+#print(nx.is_directed_acyclic_graph(true_ichain))
 #viz_ichain(true_ichain)
 
+#code for randomly generating a valid interaction chain
 looking = True
 while looking:
     random_dyn_succ = random_dynamic_successor(obj_dyn)
@@ -255,9 +265,7 @@ while looking:
     if nx.is_directed_acyclic_graph(random_ichain):
         looking = False
 
-viz_ichain(random_ichain)
-
-###compute how likely this graph is to exist
+#viz_ichain(random_ichain)
 
 def dict_to_prob(d):
     #normalize values in object-object-dynamic dict
@@ -278,7 +286,66 @@ p_l_dict = dict_to_prob(l_dict)
 p_r_dict = dict_to_prob(r_dict)
 p_game_dict = dict_to_prob(game_dict)
         
-print(p_robot_dict[(2,4)]['game'])
-print(p_u_dict[True]['d'])
-print(p_u_dict[False]['l'])
+#print(p_robot_dict[(2,4)]['game'])
+#print(p_u_dict[True]['d'])
+#print(p_u_dict[False]['l'])
 
+#helper function for prob_ichain
+def max_prob_ps(d,dyn):
+    max_prob = 0
+    max_pos, max_obj, max_dyn = "None", "None", "None"
+    original_dyn = dyn
+    for pos,pod in d.items(): #for each position object can take on
+        for obj,objd in pod.items(): #for each potential successor object
+            dyn = original_dyn
+            if "press" in dyn: #any dynamic with press is called True in d, do this weird if statement due to them all having true/false
+                if obj != dyn[0]: #this true/false isnt matched up to our button, skip it
+                    continue
+                else:
+                    dyn = True
+
+            probs = d[pos][obj][dyn]
+            if probs > max_prob:
+                max_prob = probs
+                max_pos = pos
+                max_obj = obj
+                max_dyn = dyn
+    #print(max_pos,max_obj,max_dyn,max_prob)
+    return(max_prob)
+
+#calculate the probability of an interaction chain
+def prob_ichain(p_robot_dict,p_u_dict,p_r_dict,p_d_dict,p_l_dict,p_game_dict,ichain):
+    prob = 1
+    edges = ichain.edges
+    for (p,s) in edges:
+        if p in objs: #p is object, s is a supposed successor dynamic. Lets look for max prob of this relationship
+            #print(p,s)
+            if p == "robot":
+                prob *= max_prob_ps(p_robot_dict,s)
+            if p == "u":
+                prob *= max_prob_ps(p_u_dict,s)
+            if p == "d":
+                prob *= max_prob_ps(p_d_dict,s)
+            if p == "l":
+                prob *= max_prob_ps(p_l_dict,s)
+            if p == "r":
+                prob *= max_prob_ps(p_r_dict,s)
+            if p == "game":
+                prob *= max_prob_ps(p_game_dict,s)
+    return(prob)
+        
+print(prob_ichain(p_robot_dict,p_u_dict,p_r_dict,p_d_dict,p_l_dict,p_game_dict,true_ichain))
+print("============== REERE")
+
+##Find a random chain with higher than 50 percent probability
+looking = True
+while looking:
+    random_dyn_succ = random_dynamic_successor(obj_dyn)
+    random_ichain = create_ichain(random_dyn_succ,obj_dyn)
+    if nx.is_directed_acyclic_graph(random_ichain) and prob_ichain(p_robot_dict,p_u_dict,p_r_dict,p_d_dict,p_l_dict,p_game_dict,random_ichain) > 0.9:
+        looking = False
+
+print(prob_ichain(p_robot_dict,p_u_dict,p_r_dict,p_d_dict,p_l_dict,p_game_dict,random_ichain))
+viz_ichain(random_ichain)
+
+#take a interaction chain and turn it into a transition function for an MDP, and solve it!

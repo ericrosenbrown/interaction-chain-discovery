@@ -2,7 +2,10 @@ from simple_rl.agents import QLearningAgent, RandomAgent, RMaxAgent
 from FlatMDPClass import FlatMDP
 from simple_rl.run_experiments import run_agents_on_mdp
 import random
-
+import copy
+#from graph import Graph
+import networkx as nx
+import matplotlib.pyplot as plt
 from collections import defaultdict
 
 # Setup MDP.
@@ -16,8 +19,8 @@ for episode in range(100):
     for step in range(100):
         mdp.execute_agent_action(random.choice(mdp.get_actions()))
         history.append(mdp.cur_state)
-        if mdp.is_goal_state(mdp.cur_state):
-            mdp.reset()
+        #if mdp.is_goal_state(mdp.cur_state):
+        #    mdp.reset()
     histories.append(history)
 
 #robot_dict[[1,2]['left'] = {'press': 20, 'unpress':0}}
@@ -102,6 +105,12 @@ for episode in histories:
                l_dict[cur_state.l]['game']['right'] = 1
 
        elif cur_state.xg < last_state.xg: #moved left
+           if cur_state.l == False:
+               print("LOL")
+               print(i)
+               print(len(episode))
+               print(last_state)
+               print(cur_state)
            try:
                robot_dict[(cur_state.xr,cur_state.yr)]['game']['left'] += 1
                u_dict[cur_state.u]['game']['left'] += 1
@@ -182,10 +191,73 @@ print(l_dict[True]['u'])
 print(l_dict[False]['r'])
 
 #Code for discovering structures
-objects = ["robot","u","d","l","r","game"]
-object_dynamics ={"u": ["u_press"], "d": ["d_press"], "l": ["l_press"], "r":["r_press"], "game":["up","right","down","left","stop"]}
+objs = ["robot","u","d","l","r","game"]
+obj_dyn ={"u": ["u_press"], "d": ["d_press"], "l": ["l_press"], "r":["r_press"], "game":["up","right","down","left"]}
 
-dynamic_object1 = {"u_press": "robot", "d_press": "robot", "l_press": "robot", "r_press": "robot", "up" : "u", "right": "r", "down": "d", "left": "l"}
-#figure out how to generate the above
-#figure out how to get how likely above chain is
-#demonstrate how to convert this into transition function (Hint, it's really easy, just normalize the above probabilities and sample from them when applying update dynamics according to object_dynamics)
+true_dyn_succ = {"u_press": "robot", "d_press": "robot", "l_press": "robot", "r_press": "robot", "up" : "u", "right": "r", "down": "d", "left": "l"}
+
+def random_dynamic_successor(obj_dyn):
+    ret_graph = {}
+    graph_objects = list(obj_dyn.keys())
+    for obj in graph_objects:
+        potential_successors = copy.deepcopy(graph_objects)
+        potential_successors.remove(obj)
+        potential_successors.append("robot")
+        for dyn in obj_dyn[obj]:
+            ret_graph[dyn] = random.choice(potential_successors)
+    return(ret_graph)
+
+print(random_dynamic_successor(obj_dyn))
+
+#turn random_graph into a graph based on objct dynamics, if it is a DAG, valid. Otherwise, throwout
+
+def create_ichain(dyn_succ, obj_dyn):
+    #create a graph based on objects, dynamics, and succesor relationships, and check if it's valid
+    obj_nodes = list(obj_dyn.keys()) + ["robot"]
+    dyn_nodes = list(dyn_succ.keys())
+    nodes = obj_nodes + dyn_nodes
+    num_nodes = len(nodes)
+
+    #generate the graph and add edges according to succesor relationship and obj_dynk
+    #g = Graph(num_nodes)
+    G = nx.DiGraph()
+
+    #add directed edges from object dynamic to associated object (obj_dyn) (except for robot)
+    for obj in obj_dyn.keys():
+        for dyn in obj_dyn[obj]:
+            G.add_edge(dyn,obj)
+  
+    #add directed edges from successor objects to dynamics (dyn_succ)
+    for dyn in dyn_succ.keys():
+        G.add_edge(dyn_succ[dyn],dyn)
+
+    return(G)
+
+def viz_ichain(G):
+    #draw graph for sanity
+    positions = nx.spring_layout(G)
+
+    nx.draw_networkx_labels(G,positions)
+    nx.draw_networkx_edges(G,positions)
+    nx.draw_networkx_nodes(G,positions)
+    plt.show()
+
+    
+
+true_ichain = create_ichain(true_dyn_succ,obj_dyn)
+print(nx.is_directed_acyclic_graph(true_ichain))
+#viz_ichain(true_ichain)
+
+looking = True
+while looking:
+    random_dyn_succ = random_dynamic_successor(obj_dyn)
+    random_ichain = create_ichain(random_dyn_succ,obj_dyn)
+    if nx.is_directed_acyclic_graph(random_ichain):
+        looking = False
+
+viz_ichain(random_ichain)
+
+#compute how likely this graph is to exist
+#demonstrate how to convert this into transition function (Hint, it's really easy, just normalize the above probabilities and sample from them when applying update dynamics according to object_dynamics, and make sure that in order to avoid active dynamic conflicts to resolve the object update only when all dynamic likelihoods have been calculated, and choose most likely)
+#use transition function in VI
+#plug entire thing together and look at results!

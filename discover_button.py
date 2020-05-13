@@ -255,7 +255,7 @@ def viz_ichain(G):
 
 true_ichain = create_ichain(true_dyn_succ,obj_dyn)
 #print(nx.is_directed_acyclic_graph(true_ichain))
-#viz_ichain(true_ichain)
+viz_ichain(true_ichain)
 
 #code for randomly generating a valid interaction chain
 looking = True

@@ -62,7 +62,7 @@ def main():
         args.slip)
 
     # Run value iteration on the mdp and save the history of value backups until convergence
-    vi = ValueIteration(mdp, max_iterations=50)
+    vi = ValueIteration(mdp, max_iterations=1)
     _, _, histories = vi.run_vi_histories()
 
     # For every value backup, visualize the policy

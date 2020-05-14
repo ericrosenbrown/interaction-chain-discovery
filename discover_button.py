@@ -18,7 +18,8 @@ for episode in range(100):
     mdp.reset()
     history = [mdp.cur_state]
     for step in range(100):
-        mdp.execute_agent_action(random.choice(mdp.get_actions()))
+        action = random.choice(mdp.get_actions())
+        mdp.execute_agent_action(action)
         history.append(mdp.cur_state)
         #if mdp.is_goal_state(mdp.cur_state):
         #    mdp.reset()
